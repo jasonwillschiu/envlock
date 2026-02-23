@@ -136,6 +136,7 @@ Implications:
 ### Local machine files (private)
 
 - `~/.config/envlock/keys/default.agekey`
+- `~/.config/envlock/credentials.toml` (planned, per-machine Tigris credentials, `0600`)
 
 ### Project files (safe to commit)
 
@@ -146,18 +147,18 @@ Implications:
 
 Object keys live under:
 
-- `envlock/<app-name>/`
+- `<app-name>/`
 
 Examples:
 
-- `envlock/my-app/dev.envlock`
-- `envlock/my-app/prod.envlock`
-- `envlock/my-app/local.envlock`
+- `my-app/.envlock`
+- `my-app/worker.envlock`
+- `my-app/secrets/main.envlock`
 
 Planned internal enrollment metadata prefixes (v1.1):
 
-- `envlock/<app-name>/_enroll/invites/...`
-- `envlock/<app-name>/_enroll/requests/...`
+- `<app-name>/_enroll/invites/...`
+- `<app-name>/_enroll/requests/...`
 
 ## Install (Development)
 
@@ -176,6 +177,20 @@ Run directly:
 ```bash
 go run ./cmd/envlock --help
 ```
+
+## Credentials (Per-Machine CLI Install)
+
+Recommended precedence for Tigris credentials (planned):
+
+1. Environment variables (`TIGRIS_ACCESS_KEY`, `TIGRIS_SECRET_KEY`, `TIGRIS_ENDPOINT`, `TIGRIS_REGION`, `TIGRIS_BUCKET`)
+2. `~/.config/envlock/credentials.toml` (machine-local, not in git, file mode `0600`)
+3. Project config (`.envlock/project.toml`) for non-secret defaults like bucket/prefix/endpoint only
+
+Notes:
+
+- `.env` is best for local development convenience only.
+- Once installed as a CLI, machine-level credentials should live in the user config directory or be injected via shell environment.
+- Project files should not contain secrets.
 
 ## Quick Start (Current Implemented Commands)
 
@@ -201,8 +216,10 @@ envlock init --key-name default
 ### 2. Initialize a project in your repo
 
 ```bash
-envlock project init --app my-app --bucket my-tigris-bucket
+envlock project init --bucket my-tigris-bucket
 ```
+
+By default, `envlock` infers the app name from the current folder name (for example, `/path/to/worker` becomes `worker`). You can still override this with `--app`.
 
 This creates:
 
@@ -264,8 +281,8 @@ Note: revoking/removing a recipient from the project file does not retroactively
 
 ```bash
 envlock init
-envlock project init --app my-app --bucket my-bucket
-envlock push --env dev --in .env
+envlock project init --bucket my-bucket
+envlock push --in .env --object .envlock
 ```
 
 ### Add a new machine (v1.1 invite flow)
@@ -273,27 +290,27 @@ envlock push --env dev --in .env
 Trusted machine:
 
 ```bash
-envlock enroll invite --app my-app --ttl 15m
+envlock enroll invite --ttl 15m
 ```
 
 New machine:
 
 ```bash
 envlock init
-envlock enroll join --app my-app --token <invite-token>
+envlock enroll join --token <invite-token>
 ```
 
 Trusted machine approves and optionally rekeys:
 
 ```bash
-envlock enroll list --app my-app
-envlock enroll approve <request-id> --rekey dev
+envlock enroll list
+envlock enroll approve <request-id> --rekey-object .envlock
 ```
 
 New machine can pull/decrypt:
 
 ```bash
-envlock pull --env dev --out .env
+envlock pull --object .envlock --out .env
 ```
 
 ## Overwrite Safety Model (Planned)
@@ -329,8 +346,8 @@ Single-object rekey (v1):
 Examples:
 
 ```bash
-envlock rekey --env dev --add-recipient age1...
-envlock rekey --env dev --remove-recipient old-laptop
+envlock rekey --object .envlock --add-recipient age1...
+envlock rekey --object .envlock --remove-recipient old-laptop
 ```
 
 Important for lost/compromised devices:

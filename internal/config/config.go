@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +20,7 @@ type Project struct {
 }
 
 func DefaultPrefix(appName string) string {
-	clean := strings.Trim(strings.TrimSpace(appName), "/")
-	return fmt.Sprintf("envlock/%s", clean)
+	return strings.Trim(strings.TrimSpace(appName), "/")
 }
 
 func ProjectDirPath(base string) string {

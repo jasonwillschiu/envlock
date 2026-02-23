@@ -41,6 +41,17 @@ Private key file may include metadata comment:
 AGE-SECRET-KEY-...
 ```
 
+### Machine credentials (planned)
+
+Machine-local Tigris credentials should be stored outside the repo.
+
+Planned options:
+
+- environment variables (`TIGRIS_ACCESS_KEY`, `TIGRIS_SECRET_KEY`, `TIGRIS_ENDPOINT`, `TIGRIS_REGION`)
+- `~/.config/envlock/credentials.toml` (file mode `0600`)
+
+Project config (`./.envlock/project.toml`) may store non-secret defaults (bucket, prefix, endpoint), but not access keys.
+
 ### Project config (safe to commit)
 
 `./.envlock/project.toml`
@@ -49,7 +60,7 @@ AGE-SECRET-KEY-...
 version = 1
 app_name = "my-app"
 bucket = "my-bucket"
-prefix = "envlock/my-app"
+prefix = "my-app"
 endpoint = "" # optional
 ```
 
@@ -83,23 +94,23 @@ Status values:
 
 Base prefix:
 
-- `envlock/<app-name>/`
+- `<app-name>/`
 
 Env blobs:
 
-- `envlock/<app-name>/<env>.envlock`
+- `<app-name>/<object-name>.envlock`
 
 Examples:
 
-- `envlock/my-app/dev.envlock`
-- `envlock/my-app/prod.envlock`
+- `my-app/.envlock`
+- `my-app/worker.envlock`
 
 ### Enrollment metadata (v1.1)
 
 Internal prefixes (implementation detail):
 
-- `envlock/<app-name>/_enroll/invites/<invite-id>.json`
-- `envlock/<app-name>/_enroll/requests/<request-id>.json`
+- `<app-name>/_enroll/invites/<invite-id>.json`
+- `<app-name>/_enroll/requests/<request-id>.json`
 
 ## Command Spec
 
@@ -132,9 +143,9 @@ Initialize project config and recipients store.
 
 Flags:
 
-- `--app <name>` required
+- `--app <name>` optional (defaults to current folder name)
 - `--bucket <bucket>` required
-- `--prefix <prefix>` optional; default `envlock/<app>`
+- `--prefix <prefix>` optional; default `<app>`
 - `--endpoint <url>` optional
 - `--key-name <name>` default `default`
 - `--name <device-name>` optional recipient name override
@@ -143,6 +154,7 @@ Flags:
 Behavior:
 
 - requires local key to exist
+- infers app name from current folder when `--app` is omitted
 - writes `.envlock/project.toml`
 - creates/updates `.envlock/recipients.json`
 - auto-adds current machine as recipient (idempotent if duplicate)
@@ -209,7 +221,7 @@ Encrypt and upload to Tigris.
 
 Proposed flags:
 
-- `--env <name>` (maps to `<env>.envlock` under project prefix)
+- `--object <name>` (maps to `<name>` under project prefix, e.g. `.envlock` or `worker.envlock`)
 - `--in <path>` default `.env`
 - `--force` overwrite existing remote object
 
@@ -224,7 +236,7 @@ Download and decrypt from Tigris.
 
 Proposed flags:
 
-- `--env <name>`
+- `--object <name>`
 - `--out <path>` default `.env`
 - `--force` overwrite local output
 - `--backup` create backup before overwrite
@@ -242,8 +254,8 @@ Single-object rekey in Tigris.
 Proposed forms:
 
 ```bash
-envlock rekey --env dev --add-recipient <age1...>
-envlock rekey --env dev --remove-recipient <name|fingerprint>
+envlock rekey --object .envlock --add-recipient <age1...>
+envlock rekey --object .envlock --remove-recipient <name|fingerprint>
 ```
 
 Behavior:

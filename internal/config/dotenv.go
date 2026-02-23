@@ -12,7 +12,7 @@ import (
 // It does not override existing environment variables and is a no-op when the
 // file is absent.
 func LoadDotenvIfPresent() {
-	if strings.EqualFold(os.Getenv("ENVLOCK_ENV"), "production") {
+	if strings.EqualFold(os.Getenv("ENV"), "production") || strings.EqualFold(os.Getenv("ENVLOCK_ENV"), "production") {
 		return
 	}
 

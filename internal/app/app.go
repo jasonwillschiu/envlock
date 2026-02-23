@@ -180,9 +180,9 @@ func printProjectUsage() {
 func runProjectInit(args []string) error {
 	fs := flag.NewFlagSet("project init", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
-	appName := fs.String("app", "", "application name (required)")
+	appName := fs.String("app", "", "application name (defaults to current folder name)")
 	bucket := fs.String("bucket", "", "Tigris bucket name (required)")
-	prefix := fs.String("prefix", "", "object prefix (defaults to envlock/<app>)")
+	prefix := fs.String("prefix", "", "object prefix (defaults to <app>)")
 	endpoint := fs.String("endpoint", "", "optional S3 endpoint override")
 	keyName := fs.String("key-name", "default", "local key profile used for auto-adding this device")
 	deviceName := fs.String("name", "", "recipient device name override")
@@ -193,11 +193,19 @@ func runProjectInit(args []string) error {
 	if fs.NArg() != 0 {
 		return errors.New("project init does not accept positional arguments")
 	}
-	if strings.TrimSpace(*appName) == "" {
-		return errors.New("--app is required")
-	}
 	if strings.TrimSpace(*bucket) == "" {
 		return errors.New("--bucket is required")
+	}
+	app := strings.TrimSpace(*appName)
+	if app == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		app = filepath.Base(cwd)
+	}
+	if strings.TrimSpace(app) == "" || app == "." || app == string(filepath.Separator) {
+		return errors.New("could not infer app name from current directory; pass --app")
 	}
 
 	idPath, err := keys.DefaultKeyPath(*keyName)
@@ -220,11 +228,11 @@ func runProjectInit(args []string) error {
 
 	pfx := strings.TrimSpace(*prefix)
 	if pfx == "" {
-		pfx = config.DefaultPrefix(*appName)
+		pfx = config.DefaultPrefix(app)
 	}
 	proj := config.Project{
 		Version:  1,
-		AppName:  strings.TrimSpace(*appName),
+		AppName:  app,
 		Bucket:   strings.TrimSpace(*bucket),
 		Prefix:   pfx,
 		Endpoint: strings.TrimSpace(*endpoint),

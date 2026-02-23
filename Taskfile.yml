@@ -1,0 +1,64 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet across the module
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint and gopls diagnostics
+    deps:
+      - fmt
+      - vet
+    cmds:
+      - golangci-lint run ./...
+      - find . -name "*.go" -type f | xargs gopls check -severity=hint || true
+    ignore_error: true
+
+  gopls-check:
+    desc: Run gopls diagnostics only (includes modernize analyzer)
+    cmds:
+      - find . -name "*.go" -type f | xargs gopls check -severity=hint
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  build:
+    desc: Build the envlock CLI
+    cmds:
+      - mkdir -p bin
+      - go build -o bin/envlock ./cmd/envlock
+
+  install:
+    desc: Install envlock into /opt/homebrew/bin or /usr/local/bin
+    deps:
+      - build
+    cmds:
+      - |
+        if [ -d /opt/homebrew/bin ]; then
+          install -m 0755 bin/envlock /opt/homebrew/bin/envlock
+        else
+          install -m 0755 bin/envlock /usr/local/bin/envlock
+        fi
+
+  run:
+    desc: "Run envlock locally (pass args with: task run -- --help)"
+    cmds:
+      - go run ./cmd/envlock {{.CLI_ARGS}}
+
+  clean:
+    desc: Remove built binary
+    cmds:
+      - rm -f bin/envlock
