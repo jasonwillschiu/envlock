@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jasonchiu/envlock-com/internal/config"
-	"github.com/jasonchiu/envlock-com/internal/keys"
-	"github.com/jasonchiu/envlock-com/internal/recipients"
+	"github.com/jasonchiu/envlock/internal/config"
+	"github.com/jasonchiu/envlock/internal/keys"
+	"github.com/jasonchiu/envlock/internal/recipients"
 )
 
 func Run(args []string) error {

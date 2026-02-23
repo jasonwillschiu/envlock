@@ -1,4 +1,4 @@
-module github.com/jasonchiu/envlock-com
+module github.com/jasonchiu/envlock
 
 go 1.23.0
 

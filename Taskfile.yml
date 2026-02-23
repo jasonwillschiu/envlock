@@ -39,7 +39,7 @@ tasks:
     desc: Build the envlock CLI
     cmds:
       - mkdir -p bin
-      - go build -o bin/envlock ./cmd/envlock
+      - go build -o bin/envlock .
 
   install:
     desc: Install envlock into /opt/homebrew/bin or /usr/local/bin
@@ -56,7 +56,7 @@ tasks:
   run:
     desc: "Run envlock locally (pass args with: task run -- --help)"
     cmds:
-      - go run ./cmd/envlock {{.CLI_ARGS}}
+      - go run . {{.CLI_ARGS}}
 
   clean:
     desc: Remove built binary

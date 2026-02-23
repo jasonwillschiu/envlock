@@ -1,19 +1,20 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a Go CLI project (`envlock`). The entrypoint is `cmd/envlock/main.go`, and application logic lives under `internal/` by domain (`app`, `config`, `keys`, `recipients`). Build outputs go to `bin/` (for example `bin/envlock`). Design notes and planning docs live in `docs/`. Root files include `Taskfile.yml` for common workflows and `README.md` for product scope/status.
+This repository is a Go CLI project (`envlock`). Module path is `github.com/jasonchiu/envlock`. The entrypoint is `main.go`, and application logic lives under `internal/` by domain (`app`, `config`, `keys`, `recipients`). Build outputs go to `bin/` (for example `bin/envlock`). Design notes and planning docs live in `docs/`. Root files include `Taskfile.yml` for common workflows and `README.md` for product scope/status.
 
 ## Build, Test, and Development Commands
 Prefer `task` (from `Taskfile.yml`) for local development:
 
 - `task build` - builds the CLI to `bin/envlock`
 - `task run -- --help` - runs the CLI locally with arguments
+- `go install github.com/jasonchiu/envlock@latest` - installs the CLI from the renamed module root
 - `task test` - runs `go test -v ./...`
 - `task fmt` - formats Go packages with `go fmt ./...`
 - `task vet` - runs `go vet ./...`
 - `task lint` - runs `golangci-lint` and `gopls` diagnostics (best effort)
 
-Direct Go commands also work, e.g. `go build ./cmd/envlock`.
+Direct Go commands also work, e.g. `go build .` and `go run . --help`.
 
 ## Coding Style & Naming Conventions
 Use standard Go conventions and keep code `gofmt`-formatted. Package names should be short, lowercase, and noun-based (as in `internal/keys`, `internal/config`). Exported identifiers use `PascalCase`; unexported identifiers use `camelCase`. Prefer small functions with explicit error returns and wrap errors with context.

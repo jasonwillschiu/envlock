@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jasonchiu/envlock-com/internal/app"
-	"github.com/jasonchiu/envlock-com/internal/config"
+	"github.com/jasonchiu/envlock/internal/app"
+	"github.com/jasonchiu/envlock/internal/config"
 )
 
 func main() {

@@ -166,16 +166,27 @@ Prerequisites:
 
 - Go 1.23+
 
-Build:
+Install (Go):
 
 ```bash
-go build ./cmd/envlock
+go install github.com/jasonchiu/envlock@latest
+```
+
+Notes:
+
+- The module path is now `github.com/jasonchiu/envlock`.
+- If you previously used the `envlock-com` repo/module path, update local scripts and docs to the new import/install path.
+
+Build (local checkout):
+
+```bash
+go build .
 ```
 
 Run directly:
 
 ```bash
-go run ./cmd/envlock --help
+go run . --help
 ```
 
 ## Credentials (Per-Machine CLI Install)
@@ -418,7 +429,7 @@ Current focus:
 
 Suggested internal package layout:
 
-- `cmd/envlock/`
+- `main.go` (CLI entrypoint)
 - `internal/app/`
 - `internal/config/`
 - `internal/keys/`
