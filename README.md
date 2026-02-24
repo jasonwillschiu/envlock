@@ -20,14 +20,15 @@ Implemented now:
 - `envlock status`
 - `envlock project init`
 - `envlock project show`
-- `envlock recipients list/add/remove`
+- Tigris-backed `envlock recipients list/add/remove`
+- Tigris-backed `envlock enroll invite/join/list/approve/reject`
 
 Planned next:
 
 - local `encrypt` / `decrypt`
 - Tigris `push` / `pull`
 - `rekey`
-- Tigris enrollment invites (`enroll invite/join/list/approve/reject`)
+- conflict-safe remote metadata updates / versioning for concurrent admin changes
 
 ## Why envlock (vs just AirDroping `.env`)
 
@@ -39,7 +40,7 @@ AirDrop is excellent for one-off nearby transfers on Macs. `envlock` is useful w
 - device removal / rekeying workflow
 - future cross-platform support (not Apple-only)
 
-The key product challenge is onboarding. `envlock` addresses this by planning a Tigris-based invite enrollment flow so you do not manually copy/paste public keys in the normal path.
+The key product challenge is onboarding. `envlock` now supports a Tigris-backed invite enrollment flow so you do not manually copy/paste public keys in the normal path.
 
 ## Security Model (What It Does / Does Not Protect)
 
@@ -79,7 +80,7 @@ This is expected and secure behavior.
 
 ### Tigris as transport + source of truth
 
-Tigris stores encrypted blobs and (planned) enrollment metadata.
+Tigris stores encrypted blobs and enrollment/recipient metadata.
 
 Important: Tigris access is not the same as decryption authorization. The private key still gates access to secrets.
 
@@ -89,7 +90,8 @@ Important: Tigris access is not the same as decryption authorization. The privat
 
 - per-device keypairs (local file storage)
 - project config in `./.envlock/project.toml`
-- recipients in `./.envlock/recipients.json` (safe to commit)
+- recipients in Tigris project metadata (`<prefix>/_envlock/recipients.json`)
+- Tigris-backed enrollment invites/requests (`<prefix>/_envlock/enroll/...`)
 - local encrypt/decrypt
 - Tigris push/pull
 - single-object rekey
@@ -97,11 +99,7 @@ Important: Tigris access is not the same as decryption authorization. The privat
 
 ### v1.1
 
-- Tigris-based enrollment invites (short-lived, single-use)
-- `envlock enroll invite`
-- `envlock enroll join`
-- `envlock enroll list`
-- `envlock enroll approve/reject`
+- enrollment UX improvements (polling/watch, optional approvals)
 - optional rekey on approval (`--rekey <env>` / `--rekey-all`)
 
 ## Encryption and Key Choices
@@ -141,7 +139,6 @@ Implications:
 ### Project files (safe to commit)
 
 - `./.envlock/project.toml`
-- `./.envlock/recipients.json`
 
 ## Tigris Object Layout (Planned)
 
@@ -151,39 +148,44 @@ Object keys live under:
 
 Examples:
 
-- `my-app/.envlock`
-- `my-app/worker.envlock`
-- `my-app/secrets/main.envlock`
+- `my-app/.envlock` (planned encrypted env object)
+- `my-app/worker.envlock` (planned encrypted env object)
+- `my-app/_envlock/recipients.json` (implemented recipient source of truth)
+- `my-app/_envlock/enroll/invites/<id>.json` (implemented)
+- `my-app/_envlock/enroll/requests/<id>.json` (implemented)
 
-Planned internal enrollment metadata prefixes (v1.1):
-
-- `<app-name>/_enroll/invites/...`
-- `<app-name>/_enroll/requests/...`
-
-## Install (Development)
+## Install
 
 Prerequisites:
 
 - Go 1.23+
 
-Install (Go):
+Install with Go (recommended):
 
 ```bash
 go install github.com/jasonchiu/envlock@latest
 ```
+
+Verify install:
+
+```bash
+envlock --help
+```
+
+If `envlock` is not found, add Go's bin directory to your `PATH` (commonly `$(go env GOPATH)/bin`).
 
 Notes:
 
 - The module path is now `github.com/jasonchiu/envlock`.
 - If you previously used the `envlock-com` repo/module path, update local scripts and docs to the new import/install path.
 
-Build (local checkout):
+Build from a local checkout (development):
 
 ```bash
 go build .
 ```
 
-Run directly:
+Run from source (without installing):
 
 ```bash
 go run . --help
@@ -204,6 +206,115 @@ Notes:
 - Project files should not contain secrets.
 
 ## Quick Start (Current Implemented Commands)
+
+### Fast path: two machines (Tigris invite flow, no public-key copy/paste)
+
+This is the simplest onboarding flow using current commands. It replaces manual public-key copy/paste and avoids multiple git sync loops during enrollment.
+
+### First machine (create project and add yourself)
+
+1. Install the CLI:
+
+```bash
+go install github.com/jasonchiu/envlock@latest
+```
+
+2. Export Tigris credentials for this machine (required for project metadata + future object access):
+
+```bash
+export TIGRIS_ACCESS_KEY=...
+export TIGRIS_SECRET_KEY=...
+export TIGRIS_ENDPOINT=...
+export TIGRIS_REGION=auto
+```
+
+3. Generate a local device key:
+
+```bash
+envlock init
+```
+
+4. In your project repo, initialize `envlock` (this writes `.envlock/project.toml` and bootstraps the remote recipients store in Tigris):
+
+```bash
+envlock project init --bucket my-tigris-bucket
+```
+
+5. Commit project config so the second machine can use the same bucket/prefix settings:
+
+```bash
+git add .envlock/project.toml
+git commit -m "Initialize envlock project"
+git push
+```
+
+6. Create an invite token for the second machine:
+
+```bash
+envlock enroll invite
+```
+
+### Second machine (join with invite)
+
+1. Install the CLI:
+
+```bash
+go install github.com/jasonchiu/envlock@latest
+```
+
+2. Export Tigris credentials for the second machine:
+
+```bash
+export TIGRIS_ACCESS_KEY=...
+export TIGRIS_SECRET_KEY=...
+export TIGRIS_ENDPOINT=...
+export TIGRIS_REGION=auto
+```
+
+3. Pull/clone the same project repo (so you have `.envlock/project.toml`).
+
+4. Generate a local device key on the second machine:
+
+```bash
+envlock init --name "second-machine"
+```
+
+5. Submit an enrollment request using the invite token from the first machine (stored directly in Tigris):
+
+```bash
+envlock enroll join --token <invite-token>
+```
+
+### Back on the first machine (approve)
+
+1. Review pending requests:
+
+```bash
+envlock enroll list
+```
+
+2. Approve the request (this updates the remote recipients metadata in Tigris):
+
+```bash
+envlock enroll approve <request-id>
+```
+
+### Back on the second machine (complete setup)
+
+1. Verify access (recipient state is read from Tigris):
+
+```bash
+envlock status
+envlock recipients list
+```
+
+2. Pull/decrypt the encrypted file (planned):
+
+```bash
+envlock pull --object .envlock --out .env
+```
+
+Note: `enroll` and remote recipient management are implemented. `push` / `pull` / `rekey` are still planned.
 
 ### 1. Generate a local device key
 
@@ -232,12 +343,7 @@ envlock project init --bucket my-tigris-bucket
 
 By default, `envlock` infers the app name from the current folder name (for example, `/path/to/worker` becomes `worker`). You can still override this with `--app`.
 
-This creates:
-
-- `.envlock/project.toml`
-- `.envlock/recipients.json`
-
-It also auto-adds the current machine's public key as the first active recipient.
+This creates `.envlock/project.toml` and initializes the remote recipients store in Tigris, auto-adding the current machine as the first active recipient.
 
 ### 3. Inspect project config
 
@@ -255,9 +361,9 @@ Shows:
 
 - local key path and public key
 - current project config (if present)
-- recipient counts
+- remote recipient counts (if Tigris credentials are available)
 
-### 5. Manage recipients (manual fallback path)
+### 5. Manage recipients (manual/admin path, stored in Tigris)
 
 List recipients:
 
@@ -266,7 +372,7 @@ envlock recipients list
 envlock recipients list --all
 ```
 
-Add a recipient manually (advanced / fallback):
+Add a recipient manually (advanced / fallback; `enroll` is the preferred onboarding path):
 
 ```bash
 envlock recipients add macbook-air age1...
@@ -296,7 +402,7 @@ envlock project init --bucket my-bucket
 envlock push --in .env --object .envlock
 ```
 
-### Add a new machine (v1.1 invite flow)
+### Add a new machine (invite flow)
 
 Trusted machine:
 
@@ -315,7 +421,8 @@ Trusted machine approves and optionally rekeys:
 
 ```bash
 envlock enroll list
-envlock enroll approve <request-id> --rekey-object .envlock
+envlock enroll approve <request-id>
+envlock rekey --object .envlock
 ```
 
 New machine can pull/decrypt:
@@ -400,6 +507,17 @@ Invite properties:
 
 ## Troubleshooting (Current)
 
+### `missing Tigris credentials` / `missing Tigris endpoint`
+
+Set machine-local environment variables before running `envlock project init`, `envlock recipients ...`, or `envlock enroll ...`:
+
+```bash
+export TIGRIS_ACCESS_KEY=...
+export TIGRIS_SECRET_KEY=...
+export TIGRIS_ENDPOINT=...
+export TIGRIS_REGION=auto
+```
+
 ### `envlock project init` says key is missing
 
 Run:
@@ -434,9 +552,11 @@ Suggested internal package layout:
 - `internal/config/`
 - `internal/keys/`
 - `internal/recipients/`
+- `internal/enroll/`
+- `internal/remote/`
+- `internal/tigris/`
 - `internal/crypto/` (planned)
 - `internal/storage/s3/` (planned)
-- `internal/enroll/` (planned)
 
 ## FAQ
 
@@ -457,7 +577,7 @@ Because storage access and decryption authorization are different concerns. A ma
 - [ ] local encrypt/decrypt commands
 - [ ] Tigris push/pull
 - [ ] single-object rekey
-- [ ] Tigris invite enrollment
+- [x] Tigris invite enrollment metadata + CLI flow
 - [ ] `--if-match`/ETag concurrency guard
 - [ ] batch rekey (prefix)
 - [ ] optional offline recovery key

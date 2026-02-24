@@ -62,3 +62,8 @@ tasks:
     desc: Remove built binary
     cmds:
       - rm -f bin/envlock
+
+  release:
+    desc: Commit Push Commit to Github
+    cmds:
+      - mdrelease

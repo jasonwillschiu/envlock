@@ -1,3 +1,10 @@
+# 1.1.0 - Add: Tigris-backed enroll invite flow
+- Implement `enroll invite/join/list/approve/reject` and `login`/`whoami`/`devices`/`requests` commands
+- Add Tigris-backed remote store for recipients and enrollment metadata (replaces local `recipients.json`)
+- Add `internal/backend`, `internal/enroll`, `internal/remote`, `internal/tigris` packages
+- Add two-machine quickstart with invite flow and install verification to README
+- Add `task release` helper and `go.mod` AWS SDK v2 dependencies
+
 # 1.0.0 - Update: Rename module and root CLI install
 - Change module path from `github.com/jasonchiu/envlock-com` to `github.com/jasonchiu/envlock`
 - Move the CLI entrypoint to `main.go` so `go install github.com/jasonchiu/envlock@latest` works

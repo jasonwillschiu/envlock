@@ -13,6 +13,7 @@ Prefer `task` (from `Taskfile.yml`) for local development:
 - `task fmt` - formats Go packages with `go fmt ./...`
 - `task vet` - runs `go vet ./...`
 - `task lint` - runs `golangci-lint` and `gopls` diagnostics (best effort)
+- `task release` - runs `mdrelease` release helper
 
 Direct Go commands also work, e.g. `go build .` and `go run . --help`.
 
@@ -26,6 +27,11 @@ There are currently no `*_test.go` files in the repo. Add tests next to the code
 Git history currently contains only an initial commit, so no strict convention is established yet. Use concise, imperative commit subjects (for example: `add recipient validation`). Keep commits focused and logically grouped.
 
 PRs should include: purpose/summary, key behavior changes, commands run (`task test`, `task lint`, etc.), and sample CLI output for user-facing changes. Link related issues/tasks when available.
+
+## Remote Metadata (Tigris)
+- Recipients and enrollment data are stored in Tigris (S3-compatible), not in local files.
+- `internal/remote/` wraps Tigris access; `internal/enroll/` handles invite metadata.
+- Do not write recipient or enroll state to local disk — use the remote store.
 
 ## Security & Configuration Tips
 Do not commit plaintext `.env` files, machine-local credentials, or private keys. Follow the project model in `README.md`: project metadata under `./.envlock/` may be safe to commit, but machine secrets (for example under `~/.config/envlock/`) are not.
