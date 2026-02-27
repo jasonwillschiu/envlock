@@ -3,8 +3,8 @@ package backend
 import (
 	"context"
 
-	"github.com/jasonchiu/envlock/internal/enroll"
-	"github.com/jasonchiu/envlock/internal/recipients"
+	"github.com/jasonchiu/envlock/feature/enroll"
+	"github.com/jasonchiu/envlock/feature/recipients"
 )
 
 // Store is the minimal remote metadata interface used by the current CLI.

@@ -20,35 +20,43 @@
 - Module path: `github.com/jasonchiu/envlock`
 - CLI entrypoint: `main.go`
 - Binary name: `envlock`
-- Core logic packages: `internal/app`, `internal/config`, `internal/keys`, `internal/recipients`, `internal/enroll`, `internal/remote`, `internal/tigris`, `internal/backend`
+- Core logic packages: `core/config`, `core/keys`, `core/remote`, `core/tigris`, `core/backend`, `core/auth`, `core/authstate`, `core/router`, `core/serverapi`
+- Feature packages: `feature/cli`, `feature/cliauth`, `feature/enroll`, `feature/recipients`
 
 ## Hard Invariants
 - `main.go` is the installable package root so `go install github.com/jasonchiu/envlock@latest` works.
-- Keep app logic under `internal/` packages; `main.go` should remain a thin CLI bootstrap.
+- Shared logic lives in `core/`; domain features live in `feature/`; `main.go` remains a thin CLI bootstrap.
 - Do not commit plaintext project secrets or machine-local credentials.
 - Project metadata under `.envlock/` may be committed only when it is non-secret (see `README.md`).
 
 ## Project Structure
-- `main.go` -> CLI bootstrap
-- `internal/app/` -> command dispatch and CLI behavior
-- `internal/config/` -> dotenv/project config handling
-- `internal/keys/` -> local age key management
-- `internal/recipients/` -> recipient store and validation
-- `internal/enroll/` -> enrollment invite metadata (Tigris-backed)
-- `internal/remote/` -> remote store interface for Tigris metadata
-- `internal/tigris/` -> Tigris S3-compatible client
-- `internal/backend/` -> shared storage backend abstraction
+- `main.go` -> CLI bootstrap (installable root)
+- `cmd/server/` -> server-mode binary entrypoint
+- `core/config/` -> dotenv/project config handling
+- `core/keys/` -> local age key management
+- `core/remote/` -> remote store interface for Tigris metadata
+- `core/tigris/` -> Tigris S3-compatible client
+- `core/backend/` -> shared storage backend abstraction
+- `core/auth/` -> CLI auth logic
+- `core/authstate/` -> auth state store
+- `core/router/` -> server routing
+- `core/serverapi/` -> server API client
+- `feature/cli/` -> command dispatch and CLI behavior
+- `feature/cliauth/` -> CLI auth handler
+- `feature/enroll/` -> enrollment invite metadata (Tigris-backed)
+- `feature/recipients/` -> recipient store and validation
 - `docs/` -> design notes/specs/prompts
 
 ## Key Paths
 - CLI entrypoint: `main.go`
-- Command routing: `internal/app/app.go`
-- Dotenv loading: `internal/config/dotenv.go`
-- Project config model/load/save: `internal/config/config.go`
-- Recipient storage: `internal/recipients/store.go`
-- Remote Tigris store: `internal/remote/store.go`
-- Enroll invite store: `internal/enroll/store.go`
-- Tigris S3 client: `internal/tigris/client.go`
+- Server entrypoint: `cmd/server/main.go`
+- Command routing: `feature/cli/app.go`
+- Dotenv loading: `core/config/dotenv.go`
+- Project config model/load/save: `core/config/config.go`
+- Recipient storage: `feature/recipients/store.go`
+- Remote Tigris store: `core/remote/store.go`
+- Enroll invite store: `feature/enroll/store.go`
+- Tigris S3 client: `core/tigris/client.go`
 - Dev workflows: `Taskfile.yml`
 
 ## Reference Docs

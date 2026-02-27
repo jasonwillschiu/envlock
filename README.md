@@ -8,7 +8,7 @@ The project is intentionally focused on a narrow workflow:
 - encrypt to one or more device recipients
 - store only encrypted blobs remotely
 - add/remove machines safely by rekeying
-- make onboarding better than manual file copying via Tigris enrollment invites (planned v1.1)
+- make onboarding better than manual file copying via Tigris enrollment invites
 
 ## Status
 
@@ -545,16 +545,12 @@ Current focus:
 3. rekey
 4. enrollment invites
 
-Suggested internal package layout:
+Package layout:
 
 - `main.go` (CLI entrypoint)
-- `internal/app/`
-- `internal/config/`
-- `internal/keys/`
-- `internal/recipients/`
-- `internal/enroll/`
-- `internal/remote/`
-- `internal/tigris/`
+- `cmd/server/` (server-mode entrypoint)
+- `core/` — shared logic: `config`, `keys`, `remote`, `tigris`, `backend`, `auth`, `authstate`, `router`, `serverapi`
+- `feature/` — domain features: `cli`, `cliauth`, `enroll`, `recipients`
 - `internal/crypto/` (planned)
 - `internal/storage/s3/` (planned)
 

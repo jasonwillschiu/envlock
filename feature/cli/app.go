@@ -1,23 +1,30 @@
-package app
+package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/jasonchiu/envlock/internal/backend"
-	"github.com/jasonchiu/envlock/internal/config"
-	"github.com/jasonchiu/envlock/internal/enroll"
-	"github.com/jasonchiu/envlock/internal/keys"
-	"github.com/jasonchiu/envlock/internal/recipients"
-	"github.com/jasonchiu/envlock/internal/remote"
+	"github.com/jasonchiu/envlock/core/authstate"
+	"github.com/jasonchiu/envlock/core/backend"
+	"github.com/jasonchiu/envlock/core/config"
+	"github.com/jasonchiu/envlock/core/keys"
+	"github.com/jasonchiu/envlock/core/remote"
+	"github.com/jasonchiu/envlock/core/serverapi"
+	"github.com/jasonchiu/envlock/feature/enroll"
+	"github.com/jasonchiu/envlock/feature/recipients"
 )
 
 func Run(args []string) error {
@@ -85,35 +92,313 @@ func printRootUsage() {
 	fmt.Println("  enroll reject         Reject enrollment request")
 	fmt.Println()
 	fmt.Println("Scaffolded (server-backed flow planned):")
-	fmt.Println("  login                 Browser login (not implemented yet)")
-	fmt.Println("  whoami                Show authenticated user (not implemented yet)")
+	fmt.Println("  login                 Browser login (server endpoints required)")
+	fmt.Println("  whoami                Show authenticated user (server endpoints required)")
 	fmt.Println("  secrets               push/pull/ls/status/rekey command family (not implemented yet)")
 }
 
 func runLogin(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
-	server := fs.String("server", "", "envlock server URL (planned)")
+	server := fs.String("server", "", "envlock server URL")
+	noBrowser := fs.Bool("no-browser", false, "do not attempt to open browser automatically")
+	codeFlag := fs.String("code", "", "manual one-time login code (fallback flow)")
+	timeout := fs.Duration("timeout", 2*time.Minute, "wait time for localhost callback before prompting fallback")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return errors.New("login does not accept positional arguments")
 	}
-	_ = server
-	return errors.New("login is not implemented yet (planned: browser localhost callback with copy/paste fallback)")
+
+	state, statePath, err := loadAuthStateOptional()
+	if err != nil {
+		return err
+	}
+	baseURL := strings.TrimSpace(*server)
+	if baseURL == "" {
+		baseURL = state.ServerURL
+	}
+	if baseURL == "" {
+		return errors.New("server URL is required (pass --server on first login)")
+	}
+
+	client, err := serverapi.New(baseURL)
+	if err != nil {
+		return err
+	}
+
+	var cb *cliLoginCallback
+	callbackURL := ""
+	if strings.TrimSpace(*codeFlag) == "" {
+		var err error
+		cb, err = startCLILoginCallback()
+		if err != nil {
+			fmt.Printf("Warning: could not start localhost callback listener (%v)\n", err)
+			fmt.Println("Falling back to copy/paste code flow.")
+		} else {
+			defer cb.Close()
+			callbackURL = cb.URL
+		}
+	}
+
+	startResp, err := client.StartCLILogin(context.Background(), serverapi.CLILoginStartRequest{
+		CallbackURL: callbackURL,
+	})
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(startResp.AuthURL) == "" {
+		return errors.New("server returned empty auth_url")
+	}
+
+	fmt.Printf("Server: %s\n", strings.TrimRight(baseURL, "/"))
+	fmt.Printf("Open this URL to sign in:\n%s\n", startResp.AuthURL)
+	if cb != nil {
+		fmt.Printf("Waiting for callback at %s ...\n", cb.URL)
+	}
+
+	if !*noBrowser {
+		if err := openBrowser(startResp.AuthURL); err != nil {
+			fmt.Printf("Could not open browser automatically: %v\n", err)
+			fmt.Println("Open the URL above manually.")
+		}
+	}
+
+	code := strings.TrimSpace(*codeFlag)
+	if code == "" {
+		if cb != nil {
+			select {
+			case res := <-cb.Result:
+				if res.Err != nil {
+					return res.Err
+				}
+				code = res.Code
+				if startResp.State == "" {
+					startResp.State = res.State
+				}
+				fmt.Println("Received login callback.")
+			case <-time.After(*timeout):
+				fmt.Println("Login callback timed out. Use the fallback code shown by the server, then paste it here.")
+			}
+		}
+		if code == "" {
+			var err error
+			code, err = promptForLine("Enter login code: ")
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if code == "" {
+		return errors.New("login code is required")
+	}
+
+	exResp, err := client.ExchangeCLILogin(context.Background(), serverapi.CLILoginExchangeRequest{
+		Code:  code,
+		State: strings.TrimSpace(startResp.State),
+	})
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(exResp.AccessToken) == "" {
+		return errors.New("server returned empty access token")
+	}
+
+	state.ServerURL = strings.TrimRight(baseURL, "/")
+	state.AccessToken = exResp.AccessToken
+	state.RefreshToken = exResp.RefreshToken
+	state.ExpiresAt = exResp.ExpiresAt
+	state.User = authstate.User{
+		ID:          exResp.User.ID,
+		Email:       exResp.User.Email,
+		DisplayName: exResp.User.DisplayName,
+	}
+	if statePath == "" {
+		var err error
+		statePath, err = authstate.WriteDefault(state)
+		if err != nil {
+			return err
+		}
+	} else if err := authstate.Write(statePath, state); err != nil {
+		return err
+	}
+
+	fmt.Printf("Logged in to %s\n", state.ServerURL)
+	if state.User.Email != "" {
+		fmt.Printf("User: %s\n", state.User.Email)
+	}
+	fmt.Printf("Auth state saved: %s\n", statePath)
+	return nil
 }
 
 func runWhoami(args []string) error {
 	fs := flag.NewFlagSet("whoami", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
+	server := fs.String("server", "", "override server URL")
+	offline := fs.Bool("offline", false, "print cached auth state without contacting server")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return errors.New("whoami does not accept positional arguments")
 	}
-	return errors.New("whoami is not implemented yet (server-backed auth is planned)")
+	state, statePath, err := authstate.LoadDefault()
+	if err != nil {
+		if errors.Is(err, authstate.ErrNotFound) {
+			return errors.New("not logged in (run `envlock login --server <url>`)")
+		}
+		return err
+	}
+	baseURL := strings.TrimSpace(*server)
+	if baseURL == "" {
+		baseURL = state.ServerURL
+	}
+	if baseURL == "" {
+		return errors.New("no server URL configured; run `envlock login --server <url>`")
+	}
+
+	fmt.Printf("Auth state: %s\n", statePath)
+	fmt.Printf("Server: %s\n", baseURL)
+	if *offline {
+		printCachedWhoami(state)
+		return nil
+	}
+	if strings.TrimSpace(state.AccessToken) == "" {
+		return errors.New("no access token stored; run `envlock login`")
+	}
+	client, err := serverapi.New(baseURL)
+	if err != nil {
+		return err
+	}
+	user, err := client.WhoAmI(context.Background(), state.AccessToken)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("User ID: %s\n", user.ID)
+	fmt.Printf("Email: %s\n", user.Email)
+	if user.DisplayName != "" {
+		fmt.Printf("Name: %s\n", user.DisplayName)
+	}
+	return nil
+}
+
+func printCachedWhoami(state authstate.State) {
+	if state.User.ID != "" {
+		fmt.Printf("User ID (cached): %s\n", state.User.ID)
+	}
+	if state.User.Email != "" {
+		fmt.Printf("Email (cached): %s\n", state.User.Email)
+	}
+	if state.User.DisplayName != "" {
+		fmt.Printf("Name (cached): %s\n", state.User.DisplayName)
+	}
+	if !state.ExpiresAt.IsZero() {
+		fmt.Printf("Access token expires at: %s\n", state.ExpiresAt.UTC().Format(time.RFC3339))
+	}
+}
+
+func loadAuthStateOptional() (authstate.State, string, error) {
+	s, path, err := authstate.LoadDefault()
+	if err == nil {
+		return s, path, nil
+	}
+	if errors.Is(err, authstate.ErrNotFound) {
+		return authstate.State{}, path, nil
+	}
+	return authstate.State{}, "", err
+}
+
+type cliLoginCallbackResult struct {
+	Code  string
+	State string
+	Err   error
+}
+
+type cliLoginCallback struct {
+	URL      string
+	server   *http.Server
+	listener net.Listener
+	Result   chan cliLoginCallbackResult
+}
+
+func startCLILoginCallback() (*cliLoginCallback, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	out := &cliLoginCallback{
+		URL:      "http://" + ln.Addr().String() + "/callback",
+		listener: ln,
+		Result:   make(chan cliLoginCallbackResult, 1),
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := strings.TrimSpace(r.URL.Query().Get("code"))
+		state := strings.TrimSpace(r.URL.Query().Get("state"))
+		if code == "" {
+			http.Error(w, "missing code", http.StatusBadRequest)
+			select {
+			case out.Result <- cliLoginCallbackResult{Err: errors.New("callback missing code")}:
+			default:
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("envlock login received. You can return to the terminal.\n"))
+		select {
+		case out.Result <- cliLoginCallbackResult{Code: code, State: state}:
+		default:
+		}
+		go func() {
+			_ = out.server.Shutdown(context.Background())
+		}()
+	})
+	out.server = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		if err := out.server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case out.Result <- cliLoginCallbackResult{Err: err}:
+			default:
+			}
+		}
+	}()
+	return out, nil
+}
+
+func (c *cliLoginCallback) Close() error {
+	if c == nil {
+		return nil
+	}
+	if c.server != nil {
+		_ = c.server.Close()
+	}
+	if c.listener != nil {
+		_ = c.listener.Close()
+	}
+	return nil
+}
+
+func promptForLine(prompt string) (string, error) {
+	fmt.Print(prompt)
+	r := bufio.NewReader(os.Stdin)
+	line, err := r.ReadString('\n')
+	if err != nil && !errors.Is(err, os.ErrClosed) && !strings.Contains(err.Error(), "EOF") {
+		// io.EOF is fine for final line without newline, but avoid importing io only for this.
+		// Fall through and use partial line.
+	}
+	return strings.TrimSpace(line), nil
+}
+
+func openBrowser(target string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", target).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", target).Start()
+	default:
+		return exec.Command("xdg-open", target).Start()
+	}
 }
 
 func runSecrets(args []string) error {

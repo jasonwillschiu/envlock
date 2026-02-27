@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jasonchiu/envlock/internal/config"
-	"github.com/jasonchiu/envlock/internal/enroll"
-	"github.com/jasonchiu/envlock/internal/recipients"
-	"github.com/jasonchiu/envlock/internal/tigris"
+	"github.com/jasonchiu/envlock/core/config"
+	"github.com/jasonchiu/envlock/core/tigris"
+	"github.com/jasonchiu/envlock/feature/enroll"
+	"github.com/jasonchiu/envlock/feature/recipients"
 )
 
 type Store struct {

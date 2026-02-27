@@ -16,7 +16,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
-	"github.com/jasonchiu/envlock/internal/config"
+	"github.com/jasonchiu/envlock/core/config"
 )
 
 var ErrObjectNotFound = errors.New("object not found")

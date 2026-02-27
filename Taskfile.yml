@@ -41,6 +41,12 @@ tasks:
       - mkdir -p bin
       - go build -o bin/envlock .
 
+  build-server:
+    desc: Build the envlock server (dev scaffold)
+    cmds:
+      - mkdir -p bin
+      - go build -o bin/envlock-server ./cmd/server
+
   install:
     desc: Install envlock into /opt/homebrew/bin or /usr/local/bin
     deps:
@@ -57,6 +63,11 @@ tasks:
     desc: "Run envlock locally (pass args with: task run -- --help)"
     cmds:
       - go run . {{.CLI_ARGS}}
+
+  run-server:
+    desc: "Run envlock server locally (pass args with: task run-server -- ...)"
+    cmds:
+      - go run ./cmd/server {{.CLI_ARGS}}
 
   clean:
     desc: Remove built binary

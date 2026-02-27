@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a Go CLI project (`envlock`). Module path is `github.com/jasonchiu/envlock`. The entrypoint is `main.go`, and application logic lives under `internal/` by domain (`app`, `config`, `keys`, `recipients`). Build outputs go to `bin/` (for example `bin/envlock`). Design notes and planning docs live in `docs/`. Root files include `Taskfile.yml` for common workflows and `README.md` for product scope/status.
+This repository is a Go CLI project (`envlock`). Module path is `github.com/jasonchiu/envlock`. The CLI entrypoint is `main.go`; the server entrypoint is `cmd/server/`. Shared logic lives under `core/` (config, keys, remote, tigris, backend, auth, router, serverapi); domain features live under `feature/` (cli, cliauth, enroll, recipients). Build outputs go to `bin/`. Design notes and planning docs live in `docs/`. Root files include `Taskfile.yml` for common workflows and `README.md` for product scope/status.
 
 ## Build, Test, and Development Commands
 Prefer `task` (from `Taskfile.yml`) for local development:
@@ -30,7 +30,7 @@ PRs should include: purpose/summary, key behavior changes, commands run (`task t
 
 ## Remote Metadata (Tigris)
 - Recipients and enrollment data are stored in Tigris (S3-compatible), not in local files.
-- `internal/remote/` wraps Tigris access; `internal/enroll/` handles invite metadata.
+- `core/remote/` wraps Tigris access; `feature/enroll/` handles invite metadata.
 - Do not write recipient or enroll state to local disk — use the remote store.
 
 ## Security & Configuration Tips
